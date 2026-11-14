@@ -1,0 +1,192 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'gauthamraj.2307@gmail.com'
+      );
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'mobile', 'preferredLanguages', 'favouriteGenres', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'fullName', 'email', 'mobile', 'preferredLanguages', 'favouriteGenres', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.uid == request.auth.uid &&
+        data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
+        data.mobile is string && data.mobile.size() >= 0 && data.mobile.size() <= 20 &&
+        data.preferredLanguages is list && data.preferredLanguages.size() <= 10 &&
+        (data.preferredLanguages.size() == 0 || (data.preferredLanguages[0] is string && data.preferredLanguages[0].size() <= 40)) &&
+        data.favouriteGenres is list && data.favouriteGenres.size() <= 10 &&
+        (data.favouriteGenres.size() == 0 || (data.favouriteGenres[0] is string && data.favouriteGenres[0].size() <= 40)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidBookingRecord(data) {
+      return data.keys().hasAll([
+          'bookingId', 'userId', 'movieId', 'movieTitle', 'posterUrl',
+          'theatreId', 'theatreName', 'screenName', 'city', 'showDate',
+          'showTime', 'language', 'format', 'seats', 'seatCategory',
+          'subtotal', 'gstAmount', 'convenienceFee', 'totalAmount',
+          'paymentId', 'paymentMethod', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'bookingId', 'userId', 'movieId', 'movieTitle', 'posterUrl',
+          'theatreId', 'theatreName', 'screenName', 'city', 'showDate',
+          'showTime', 'language', 'format', 'seats', 'seatCategory',
+          'subtotal', 'gstAmount', 'convenienceFee', 'totalAmount',
+          'paymentId', 'paymentMethod', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.bookingId is string && data.bookingId.size() >= 1 && data.bookingId.size() <= 64 && data.bookingId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userId == request.auth.uid &&
+        data.movieId is string && data.movieId.size() >= 1 && data.movieId.size() <= 64 &&
+        data.movieTitle is string && data.movieTitle.size() >= 1 && data.movieTitle.size() <= 160 &&
+        data.posterUrl is string && data.posterUrl.size() <= 500 &&
+        data.theatreId is string && data.theatreId.size() >= 1 && data.theatreId.size() <= 64 &&
+        data.theatreName is string && data.theatreName.size() >= 1 && data.theatreName.size() <= 160 &&
+        data.screenName is string && data.screenName.size() >= 1 && data.screenName.size() <= 80 &&
+        data.city is string && data.city.size() >= 1 && data.city.size() <= 80 &&
+        data.showDate is string && data.showDate.size() >= 1 && data.showDate.size() <= 20 &&
+        data.showTime is string && data.showTime.size() >= 1 && data.showTime.size() <= 20 &&
+        data.language is string && data.language.size() >= 1 && data.language.size() <= 40 &&
+        data.format is string && data.format.size() >= 1 && data.format.size() <= 40 &&
+        data.seats is list && data.seats.size() >= 1 && data.seats.size() <= 10 &&
+        data.seats[0] is string && data.seats[0].size() <= 16 &&
+        data.seatCategory is string && data.seatCategory.size() >= 1 && data.seatCategory.size() <= 60 &&
+        data.subtotal is number && data.subtotal >= 0 &&
+        data.gstAmount is number && data.gstAmount >= 0 &&
+        data.convenienceFee is number && data.convenienceFee >= 0 &&
+        data.totalAmount is number && data.totalAmount >= 0 &&
+        data.paymentId is string && data.paymentId.size() >= 1 && data.paymentId.size() <= 100 &&
+        data.paymentMethod is string && data.paymentMethod.size() >= 1 && data.paymentMethod.size() <= 40 &&
+        data.status is string && data.status.size() <= 20 && (data.status == 'confirmed' || data.status == 'cancelled') &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWatchlistItem(data) {
+      return data.keys().hasAll(['userId', 'movieId', 'movieTitle', 'posterUrl', 'genre', 'language', 'createdAt']) &&
+        data.keys().hasOnly(['userId', 'movieId', 'movieTitle', 'posterUrl', 'genre', 'language', 'createdAt']) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userId == request.auth.uid &&
+        data.movieId is string && data.movieId.size() >= 1 && data.movieId.size() <= 64 &&
+        data.movieTitle is string && data.movieTitle.size() >= 1 && data.movieTitle.size() <= 160 &&
+        data.posterUrl is string && data.posterUrl.size() <= 500 &&
+        data.genre is string && data.genre.size() <= 100 &&
+        data.language is string && data.language.size() <= 60 &&
+        data.createdAt is timestamp;
+    }
+
+    // 4. Admins Collection (Read-Only Trusted Lookup)
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    // 5. Users Collection (PII Isolated to Owner or Admin)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (isOwner(userId) &&
+            incoming().email == existing().email &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'mobile', 'preferredLanguages', 'favouriteGenres', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    // 6. Bookings Collection
+    match /bookings/{bookingId} {
+      allow get: if isValidId(bookingId) && (
+        (isSignedIn() && existing().userId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if (isSignedIn() && existing().userId == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser() &&
+        isValidId(bookingId) &&
+        isValidBookingRecord(incoming()) &&
+        incoming().bookingId == bookingId &&
+        incoming().status == 'confirmed' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if isVerifiedUser() &&
+        isValidId(bookingId) &&
+        isValidBookingRecord(incoming()) &&
+        incoming().bookingId == existing().bookingId &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          // Action: Cancel active booking (Terminal State Locked once cancelled)
+          (existing().userId == request.auth.uid &&
+            existing().status == 'confirmed' &&
+            incoming().status == 'cancelled' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    // 7. Watchlists Collection
+    match /watchlists/{watchlistId} {
+      allow get: if isValidId(watchlistId) && isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+      allow create: if isVerifiedUser() &&
+        isValidId(watchlistId) &&
+        isValidWatchlistItem(incoming()) &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(watchlistId) && existing().userId == request.auth.uid;
+    }
+  }
+}

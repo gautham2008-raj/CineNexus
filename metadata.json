@@ -1,0 +1,6 @@
+{
+  "name": "CineNexus",
+  "description": "Next-Generation Movie Ticket Booking System with Immersive 3D Cinema Auditorium, Live Movie & Theatre Discovery, AI CineBot Assistant, and Advanced Data Structures (AVL Tree, Prefix Trie, HashMap, Merge Sort, Queue).",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

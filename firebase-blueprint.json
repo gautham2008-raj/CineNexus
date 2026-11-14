@@ -1,0 +1,262 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user account profile and cinema preferences in CineNexus.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the user."
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Full display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 150,
+          "description": "User email address."
+        },
+        "mobile": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "User mobile number."
+        },
+        "preferredLanguages": {
+          "type": "array",
+          "description": "List of preferred movie languages (bounded <= 10)."
+        },
+        "favouriteGenres": {
+          "type": "array",
+          "description": "List of favourite movie genres (bounded <= 10)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "fullName", "email", "mobile", "preferredLanguages", "favouriteGenres", "createdAt", "updatedAt"]
+    },
+    "BookingRecord": {
+      "title": "BookingRecord",
+      "description": "Confirmed cinema ticket booking record with QR verification reference.",
+      "type": "object",
+      "properties": {
+        "bookingId": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique booking identifier."
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase UID."
+        },
+        "movieId": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Booked movie identifier."
+        },
+        "movieTitle": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Movie title."
+        },
+        "posterUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Movie poster URL."
+        },
+        "theatreId": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Theatre identifier."
+        },
+        "theatreName": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Theatre name."
+        },
+        "screenName": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Auditorium screen identifier."
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "City name."
+        },
+        "showDate": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Show date in YYYY-MM-DD."
+        },
+        "showTime": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Showtime string."
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Audio language."
+        },
+        "format": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Projection format (2D, 3D, IMAX 3D, Dolby Atmos)."
+        },
+        "seats": {
+          "type": "array",
+          "description": "Selected seat IDs (bounded <= 10)."
+        },
+        "seatCategory": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Seat tier category."
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Ticket subtotal in INR."
+        },
+        "gstAmount": {
+          "type": "number",
+          "description": "GST tax amount in INR."
+        },
+        "convenienceFee": {
+          "type": "number",
+          "description": "Booking convenience fee in INR."
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Final total paid in INR."
+        },
+        "paymentId": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Verified Razorpay payment reference."
+        },
+        "paymentMethod": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Payment method used (UPI, Card, NetBanking, Wallet)."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["confirmed", "cancelled"],
+          "maxLength": 20,
+          "description": "Booking lifecycle status."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "bookingId",
+        "userId",
+        "movieId",
+        "movieTitle",
+        "posterUrl",
+        "theatreId",
+        "theatreName",
+        "screenName",
+        "city",
+        "showDate",
+        "showTime",
+        "language",
+        "format",
+        "seats",
+        "seatCategory",
+        "subtotal",
+        "gstAmount",
+        "convenienceFee",
+        "totalAmount",
+        "paymentId",
+        "paymentMethod",
+        "status",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WatchlistItem": {
+      "title": "WatchlistItem",
+      "description": "Movie saved to a user's personal watchlist.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase UID."
+        },
+        "movieId": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Movie ID."
+        },
+        "movieTitle": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Movie title."
+        },
+        "posterUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Movie poster URL."
+        },
+        "genre": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Primary genre."
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Primary language."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when added."
+        }
+      },
+      "required": ["userId", "movieId", "movieTitle", "posterUrl", "genre", "language", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores isolated user profiles and cinema preferences restricted to owner or admin."
+    },
+    "/bookings/{bookingId}": {
+      "schema": "BookingRecord",
+      "description": "Stores confirmed INR movie ticket bookings restricted to the booking owner or admin."
+    },
+    "/watchlists/{watchlistId}": {
+      "schema": "WatchlistItem",
+      "description": "Stores user watchlist items restricted to the watchlist owner."
+    }
+  }
+}
