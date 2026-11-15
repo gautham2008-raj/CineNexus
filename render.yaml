@@ -6,8 +6,8 @@ services:
     region: singapore
     branch: main
 
-    buildCommand: bun install && bun run build
-    startCommand: bun run server.ts
+    buildCommand: npm install --legacy-peer-deps --include=dev && npm run build
+    startCommand: npm start
 
     envVars:
       - key: NODE_ENV
