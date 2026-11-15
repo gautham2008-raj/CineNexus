@@ -107,8 +107,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (res.ok) {
         const data = await res.json();
         setActionNotice(
-          `Inserted Theatre ${data.theatre.id} into Backend AVL Tree (Tree Height=${data.avlHeight}, Total Rotations=${data.avlRotations}).`
+          `Inserted Theatre "${data.theatre.name}" (${data.theatre.id}) into Backend AVL Tree (Tree Height=${data.avlHeight}, Total Rotations=${data.avlRotations}).`
         );
+        const nextNum = theatres.length + 3;
+        setTheatreId(`TH-${theatreCity.slice(0, 3).toUpperCase()}-${String(nextNum).padStart(2, '0')}`);
+        setTheatreName(`CineNexus Luxe Multiplex #${nextNum}`);
         onRefreshData();
         fetchBackendDsaTelemetry();
       }

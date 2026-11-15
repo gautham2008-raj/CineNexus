@@ -486,7 +486,8 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
     // ========================================================================
     const sharedMaterialPools = {
       available: createMaterialBundle(SEAT_COLORS.AVAILABLE_GREEN),
-      selected: createMaterialBundle(SEAT_COLORS.SELECTED_BLUE, SEAT_COLORS.SELECTED_BLUE, 0.48),
+      selected: createMaterialBundle(SEAT_COLORS.SELECTED_BLUE, 0x3b82f6, 0.52),
+      selectedBouncePulse: createMaterialBundle(0x60a5fa, 0x38bdf8, 0.95),
       booked: createMaterialBundle(SEAT_COLORS.BOOKED_RED),
       locked: createMaterialBundle(SEAT_COLORS.LOCKED_YELLOW),
       vip: createMaterialBundle(SEAT_COLORS.VIP_PURPLE),
@@ -500,12 +501,18 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
         group: THREE.Group;
         baseY: number;
         targetY: number;
+        baseScaleX: number;
+        baseScaleY: number;
+        baseScaleZ: number;
+        bounceTimer: number;
+        isSelected: boolean;
         cushion: THREE.Mesh;
         backrest: THREE.Mesh;
         headrest: THREE.Mesh;
       }
     > = {};
     const clickableMeshes: THREE.Object3D[] = [];
+    const prevSelectedSet = new Set<string>(selectedIdsRef.current);
 
     const armrestMat = new THREE.MeshStandardMaterial({
       color: 0x1e293b,
@@ -534,9 +541,10 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
       const chairGroup = new THREE.Group();
       chairGroup.position.set(x, y, z);
       chairGroup.rotation.y = yaw;
-      if (isVip) {
-        chairGroup.scale.set(1.16, 1.08, 1.15);
-      }
+      const bScaleX = isVip ? 1.16 : 1.0;
+      const bScaleY = isVip ? 1.08 : 1.0;
+      const bScaleZ = isVip ? 1.15 : 1.0;
+      chairGroup.scale.set(bScaleX, bScaleY, bScaleZ);
 
       const initBundle = isVip ? sharedMaterialPools.vip : sharedMaterialPools.available;
 
@@ -581,6 +589,11 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
         group: chairGroup,
         baseY: y,
         targetY: y,
+        baseScaleX: bScaleX,
+        baseScaleY: bScaleY,
+        baseScaleZ: bScaleZ,
+        bounceTimer: 0,
+        isSelected: prevSelectedSet.has(seat.id),
         cushion,
         backrest,
         headrest,
@@ -590,7 +603,7 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
     }
 
     // ========================================================================
-    // SILKY-SMOOTH 60FPS ANIMATION LOOP WITH IDLE WAKEUP
+    // SILKY-SMOOTH 60FPS ANIMATION LOOP WITH SELECTION BOUNCE & COLOR PULSE
     // ========================================================================
     let frameId = 0;
     let keepAliveFrames = 90;
@@ -610,10 +623,21 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
       const latestSeats = seatsRef.current;
       const selectedSet = new Set(selectedIdsRef.current);
       const hoveredId = lastHoveredSeatIdRef.current;
+      let triggeredBounce = false;
 
       for (const s of latestSeats) {
         const entry = chairRegistry[s.id];
         if (!entry) continue;
+
+        const nowSelected = selectedSet.has(s.id);
+        const wasSelected = prevSelectedSet.has(s.id);
+
+        // Trigger tactile spring bounce & color-pulse burst when seat is newly selected
+        if (nowSelected && !wasSelected) {
+          entry.bounceTimer = 0.68;
+          triggeredBounce = true;
+        }
+        entry.isSelected = nowSelected;
 
         let bundle = sharedMaterialPools.available;
         let lift = 0;
@@ -622,9 +646,12 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
           bundle = sharedMaterialPools.booked;
         } else if (s.status === 'locked') {
           bundle = sharedMaterialPools.locked;
-        } else if (selectedSet.has(s.id)) {
-          bundle = sharedMaterialPools.selected;
-          lift = 0.09;
+        } else if (nowSelected) {
+          bundle =
+            entry.bounceTimer > 0.05
+              ? sharedMaterialPools.selectedBouncePulse
+              : sharedMaterialPools.selected;
+          lift = 0.11;
         } else if (s.id === hoveredId) {
           bundle =
             s.category === 'VIP Recliner'
@@ -643,7 +670,12 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
         entry.targetY = entry.baseY + lift;
       }
 
-      wakeLoop(45);
+      prevSelectedSet.clear();
+      for (const id of selectedSet) {
+        prevSelectedSet.add(id);
+      }
+
+      wakeLoop(triggeredBounce ? 95 : 55);
     };
 
     syncSeatColorsRef.current = syncColors;
@@ -675,12 +707,50 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
         }
       }
 
+      // Continuous subtle color-pulse on selected seats
+      if (selectedIdsRef.current.length > 0) {
+        const pulseWave = 0.5 + 0.5 * Math.sin(now * 0.0065);
+        const emissiveStrength = 0.36 + pulseWave * 0.34;
+        sharedMaterialPools.selected.cushionMat.emissiveIntensity = emissiveStrength;
+        sharedMaterialPools.selected.backMat.emissiveIntensity = emissiveStrength;
+        sharedMaterialPools.selected.headMat.emissiveIntensity = emissiveStrength * 0.85;
+
+        const burstWave = 0.5 + 0.5 * Math.sin(now * 0.018);
+        const burstIntensity = 0.65 + burstWave * 0.55;
+        sharedMaterialPools.selectedBouncePulse.cushionMat.emissiveIntensity = burstIntensity;
+        sharedMaterialPools.selectedBouncePulse.backMat.emissiveIntensity = burstIntensity;
+        sharedMaterialPools.selectedBouncePulse.headMat.emissiveIntensity = burstIntensity * 0.9;
+      }
+
       for (const key in chairRegistry) {
         const c = chairRegistry[key];
-        const diff = Math.abs(c.group.position.y - c.targetY);
-        if (diff > 0.001) {
-          c.group.position.y = THREE.MathUtils.damp(c.group.position.y, c.targetY, 14, dt);
+        if (c.bounceTimer > 0) {
+          c.bounceTimer = Math.max(0, c.bounceTimer - dt);
+          const progress = 1 - c.bounceTimer / 0.68; // 0 -> 1
+          // Damped harmonic spring bounce arc + elastic squash-and-stretch scale pop
+          const springBounce = Math.sin(progress * Math.PI * 2.5) * Math.exp(-progress * 3.1) * 0.28;
+          const scalePop = 1 + Math.sin(progress * Math.PI * 2.0) * Math.exp(-progress * 3.5) * 0.16;
+
+          c.group.position.y = c.targetY + springBounce;
+          c.group.scale.set(
+            c.baseScaleX * scalePop,
+            c.baseScaleY * (1 + Math.max(0, springBounce) * 0.55),
+            c.baseScaleZ * scalePop
+          );
+
+          if (c.bounceTimer === 0 && c.isSelected) {
+            c.cushion.material = sharedMaterialPools.selected.cushionMat;
+            c.backrest.material = sharedMaterialPools.selected.backMat;
+            c.headrest.material = sharedMaterialPools.selected.headMat;
+            c.group.scale.set(c.baseScaleX, c.baseScaleY, c.baseScaleZ);
+          }
           stillMoving = true;
+        } else {
+          const diff = Math.abs(c.group.position.y - c.targetY);
+          if (diff > 0.001) {
+            c.group.position.y = THREE.MathUtils.damp(c.group.position.y, c.targetY, 14, dt);
+            stillMoving = true;
+          }
         }
       }
 
@@ -692,7 +762,7 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
       renderer.render(scene, camera);
 
       if (stillMoving) {
-        keepAliveFrames = Math.max(keepAliveFrames, 20);
+        keepAliveFrames = Math.max(keepAliveFrames, 25);
       } else {
         keepAliveFrames--;
       }
@@ -1084,7 +1154,7 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
                                 'bg-[#eab308]/25 border-[#eab308] text-amber-200 cursor-not-allowed';
                             } else if (isSelected) {
                               bgClass =
-                                'bg-[#3b82f6] border-[#60a5fa] text-white shadow-md shadow-blue-500/30';
+                                'bg-[#3b82f6] border-[#7dd3fc] text-white shadow-md shadow-sky-500/40 seat-selected-bounce';
                             } else if (isVip) {
                               bgClass =
                                 'bg-[#a855f7]/25 border-[#a855f7] text-purple-200 hover:bg-[#a855f7]/45';
@@ -1177,7 +1247,7 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
             <div className="p-6 rounded-xl bg-slate-900/60 border border-white/5 text-center space-y-2">
               <Ticket className="w-6 h-6 text-slate-500 mx-auto" />
               <p className="text-xs text-slate-300 font-medium">
-                Click any green or purple 3D chair across our 16 stadium rows (A–P) to select seats.
+                Click any green or purple 3D chair across our 16 stadium rows (A–P) to select seats with tactile spring-bounce &amp; glow feedback.
               </p>
               <p className="text-[11px] text-slate-500">
                 Rows A–E: Standard (₹{selectedShowtime.standardPriceInr}) · Rows F–L: Executive (₹
@@ -1190,10 +1260,10 @@ export const Auditorium3D: React.FC<Auditorium3DProps> = ({
               {selectedSeatObjects.map((seat) => (
                 <div
                   key={seat.id}
-                  className="px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-white/10 flex items-center justify-between text-xs"
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-900/95 border border-sky-500/40 flex items-center justify-between text-xs shadow-sm shadow-sky-500/10 transition-all"
                 >
                   <div>
-                    <span className="font-mono font-bold text-white text-sm">Seat {seat.id}</span>
+                    <span className="font-mono font-bold text-sky-300 text-sm">Seat {seat.id}</span>
                     <span className="text-slate-400 ml-2">
                       (Row {seat.row}, Seat #{seat.col})
                     </span>

@@ -99,10 +99,15 @@ export default function App() {
 
   const [selectedLanguageFilter, setSelectedLanguageFilter] = useState<string>('All');
   const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('All');
+  const [selectedFormatFilter, setSelectedFormatFilter] = useState<string>('All');
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<
     'now_showing' | 'trending' | 'popular_city' | 'recommended'
   >('now_showing');
   const [sortBy, setSortBy] = useState<string>('popularity');
+  const [heroSpotlightIdx, setHeroSpotlightIdx] = useState<number>(0);
+  const [quickBookMovieId, setQuickBookMovieId] = useState<string>('');
+  const [quickBookTheatreId, setQuickBookTheatreId] = useState<string>('');
+  const [quickBookSlotIdx, setQuickBookSlotIdx] = useState<number>(0);
 
   // 5. Prefix Trie Search & Autocomplete State
   const [searchQuery, setSearchQuery] = useState('');
@@ -288,6 +293,36 @@ export default function App() {
     setPaymentFeedback(null);
 
     const showKey = `${selectedMovie.id}_${theatre.id}_${bookingDate}_${slot.id}`;
+    try {
+      const res = await fetch(
+        `/api/seats?showKey=${encodeURIComponent(showKey)}&stdPrice=${slot.standardPriceInr}&execPrice=${slot.executivePriceInr}&vipPrice=${slot.vipReclinerPriceInr}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setAuditoriumSeats(data.seats || []);
+        setLayoutSource(data.layoutSource || 'CONFIGURABLE_3D_AUDITORIUM_MANIFEST');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setBookingStep('auditorium3d');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Express 1-Click Jump from Homepage Hero or Movie Card directly into 326-Seat 3D Auditorium
+  const handleExpress3DBook = async (movie: Movie, theatre: Theatre, slot: ShowtimeSlot) => {
+    const firstValidDate =
+      datesList.find((d) => d.hasConfirmedShows)?.dateStr || datesList[0]?.dateStr || '';
+    setSelectedMovie(movie);
+    setBookingLanguage(movie.languages[0] || 'Telugu');
+    setBookingFormat(slot.format || movie.formats[0] || 'Dolby Atmos');
+    setBookingDate(firstValidDate);
+    setBookingTheatre(theatre);
+    setBookingShowtime(slot);
+    setSelectedSeatIds([]);
+    setPaymentFeedback(null);
+
+    const showKey = `${movie.id}_${theatre.id}_${firstValidDate}_${slot.id}`;
     try {
       const res = await fetch(
         `/api/seats?showKey=${encodeURIComponent(showKey)}&stdPrice=${slot.standardPriceInr}&execPrice=${slot.executivePriceInr}&vipPrice=${slot.vipReclinerPriceInr}`
@@ -578,11 +613,17 @@ export default function App() {
     return <AuthGate onAuthenticated={(user) => setCurrentUser(user)} />;
   }
 
-  // Filter displayed movies by category tab & search query
+  // Filter displayed movies by category tab, format filter & search query
   const displayedMovies = movies.filter((m) => {
     if (
       searchQuery.trim() &&
       !m.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
+    ) {
+      return false;
+    }
+    if (
+      selectedFormatFilter !== 'All' &&
+      !m.formats.some((f) => f.toLowerCase().includes(selectedFormatFilter.toLowerCase()))
     ) {
       return false;
     }
@@ -592,7 +633,22 @@ export default function App() {
     return true;
   });
 
-  const heroMovie = movies[0] || null;
+  const spotlightMovies = movies.slice(0, 5);
+  const heroMovie = spotlightMovies[heroSpotlightIdx % Math.max(1, spotlightMovies.length)] || movies[0] || null;
+  const primaryCityTheatre = theatres[0] || null;
+  const todayDateStr =
+    datesList.find((d) => d.hasConfirmedShows)?.dateStr || datesList[0]?.dateStr || '';
+  const flagshipTodaySlots = primaryCityTheatre?.showtimesByDate?.[todayDateStr] || [];
+
+  const activeQuickMovie =
+    movies.find((m) => m.id === quickBookMovieId) || heroMovie || movies[0] || null;
+  const activeQuickTheatre =
+    theatres.find((t) => t.id === quickBookTheatreId) || primaryCityTheatre || null;
+  const activeQuickSlots = activeQuickTheatre?.showtimesByDate?.[todayDateStr] || [];
+  const activeQuickSlot =
+    activeQuickSlots[quickBookSlotIdx % Math.max(1, activeQuickSlots.length)] ||
+    activeQuickSlots[0] ||
+    null;
 
   return (
     <div className="min-h-screen bg-[#07090e] text-slate-100 flex flex-col">
@@ -1474,7 +1530,11 @@ export default function App() {
           />
         ) : activeTab === 'dsa' ? (
           /* CASE 3: DSA ENGINE ROOM TAB */
-          <DSAEngineRoom />
+          <DSAEngineRoom
+            theatres={theatres}
+            movies={movies}
+            onRefreshData={() => fetchLiveCinemaData(true)}
+          />
         ) : activeTab === 'docs' ? (
           /* CASE 4: PBL DOCUMENTATION TAB */
           <PBLDocumentation />
@@ -1744,112 +1804,340 @@ export default function App() {
               </div>
             ) : (
               <>
-                {/* Hero Featured Now Showing Spotlight */}
+                {/* District-Caliber Interactive Cinema Hero Showcase */}
                 {heroMovie && (
-                  <section className="relative rounded-3xl overflow-hidden border border-white/15 bg-[#0b0f19]">
+                  <section className="relative rounded-3xl overflow-hidden border border-white/15 bg-[#090d16] shadow-2xl">
+                    {/* Atmospheric Backdrop Layer */}
                     <img
                       src={heroMovie.backdropUrl}
                       alt={heroMovie.title}
                       referrerPolicy="no-referrer"
-                      className="absolute inset-0 w-full h-full object-cover opacity-40"
+                      className="absolute inset-0 w-full h-full object-cover opacity-35 scale-105 blur-[2px]"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#07090e] via-[#07090e]/85 to-transparent" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#07090e] via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#06080e] via-[#06080e]/90 to-[#06080e]/40" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#06080e] via-[#06080e]/30 to-transparent" />
 
-                    <div className="relative z-10 p-6 sm:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                      <div className="lg:col-span-8 space-y-4">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-amber-400 font-semibold">
-                          <span>NOW SHOWING IN {selectedCity.toUpperCase()} THEATRES</span>
-                          <span>·</span>
-                          <span>{heroMovie.verifiedShowCount} Verified Shows Today</span>
-                          <span>·</span>
-                          <span>★ {heroMovie.rating}/10</span>
+                    <div className="relative z-10 p-6 sm:p-10 lg:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+                      {/* Left 8 Columns: Editorial Film Spotlight & Express Showtime Dock */}
+                      <div className="lg:col-span-8 flex flex-col justify-between space-y-6">
+                        <div className="space-y-4">
+                          {/* Quiet Unboxed Kicker Line */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold tracking-wide text-amber-400">
+                            <span>SPOTLIGHT PREMIERE IN {selectedCity.toUpperCase()}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-rose-400">
+                              ★ {heroMovie.rating}/10 ({heroMovie.votesCount.toLocaleString()} Verified Ratings)
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-emerald-400 font-mono">
+                              {heroMovie.verifiedShowCount} Shows Today
+                            </span>
+                          </div>
+
+                          <h1
+                            className="font-display text-3xl sm:text-5xl font-bold text-white leading-[1.08] tracking-tight"
+                            style={{ textWrap: 'balance' }}
+                          >
+                            {heroMovie.title}
+                          </h1>
+
+                          <p className="text-xs sm:text-sm font-medium text-rose-300/95">
+                            {heroMovie.tagline}
+                          </p>
+
+                          <p className="text-slate-300 text-sm sm:text-base max-w-2xl leading-relaxed line-clamp-3">
+                            {heroMovie.synopsis}
+                          </p>
+
+                          {/* Unboxed Film Metadata & Credits */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 pt-1">
+                            <span className="font-semibold text-white">{heroMovie.certification}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{heroMovie.genres.join(' / ')}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="font-mono">{heroMovie.durationFormatted}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{heroMovie.languages.join(', ')}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-amber-400 font-mono">
+                              {heroMovie.formats.join(' · ')}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-slate-400">
+                            Directed by <strong className="text-slate-200">{heroMovie.director}</strong> · Starring{' '}
+                            <span className="text-slate-200">
+                              {heroMovie.cast.map((c) => c.name).join(', ')}
+                            </span>
+                          </div>
                         </div>
 
-                        <h1
-                          className="font-display text-3xl sm:text-5xl font-bold text-white leading-tight"
-                          style={{ textWrap: 'balance' }}
-                        >
-                          {heroMovie.title}
-                        </h1>
+                        {/* Primary CTAs + 1-Click Express 3D Showtimes Bar */}
+                        <div className="space-y-5 pt-2">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMovie(heroMovie)}
+                              className="py-3.5 px-7 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm shadow-lg shadow-rose-600/30 flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              <Ticket className="w-4 h-4" />
+                              <span>Book 3D Stadium Seats · ₹{heroMovie.basePriceInr}</span>
+                            </button>
 
-                        <p className="text-slate-300 text-sm sm:text-base max-w-2xl leading-relaxed">
-                          {heroMovie.synopsis}
-                        </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedMovie(heroMovie);
+                                setShowTrailerModal(true);
+                              }}
+                              className="py-3.5 px-5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white font-semibold text-sm flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              <Play className="w-4 h-4 text-amber-400" />
+                              <span>Watch Official Trailer</span>
+                            </button>
 
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300 pt-1">
-                          <span>{heroMovie.genres.join(' · ')}</span>
-                          <span>·</span>
-                          <span>{heroMovie.durationFormatted}</span>
-                          <span>·</span>
-                          <span>{heroMovie.languages.join(', ')}</span>
-                          <span>·</span>
-                          <span className="text-amber-400 font-mono">
-                            {heroMovie.formats.join(' / ')}
-                          </span>
-                        </div>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleWatchlist(heroMovie)}
+                              className="py-3.5 px-4 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              {watchlist.some((w) => w.id === heroMovie.id) ? (
+                                <>
+                                  <BookmarkCheck className="w-4 h-4 text-emerald-400" />
+                                  <span>Saved</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Bookmark className="w-4 h-4 text-rose-400" />
+                                  <span>Watchlist</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
 
-                        <div className="flex flex-wrap items-center gap-3 pt-3">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenMovie(heroMovie)}
-                            className="py-3.5 px-7 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm shadow-lg shadow-rose-600/30 flex items-center gap-2 transition-all cursor-pointer"
-                          >
-                            <Ticket className="w-4 h-4" />
-                            <span>Book 3D Seats · From ₹{heroMovie.basePriceInr}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedMovie(heroMovie);
-                              setShowTrailerModal(true);
-                            }}
-                            className="py-3.5 px-5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-white/15 text-white font-semibold text-sm flex items-center gap-2 transition-colors cursor-pointer"
-                          >
-                            <Play className="w-4 h-4 text-amber-400" />
-                            <span>Watch Official Trailer</span>
-                          </button>
+                          {/* Express Direct-to-3D-Auditorium Showtime Strip */}
+                          {primaryCityTheatre && flagshipTodaySlots.length > 0 && (
+                            <div className="p-4 rounded-2xl bg-[#06080e]/85 border border-white/10 flex flex-wrap items-center justify-between gap-3">
+                              <div className="space-y-0.5">
+                                <div className="text-[11px] font-semibold text-amber-400">
+                                  EXPRESS 1-CLICK 3D SEAT SELECTION · TODAY ({todayDateStr})
+                                </div>
+                                <div className="text-xs text-slate-300">
+                                  {primaryCityTheatre.name} ·{' '}
+                                  <span className="text-slate-400 font-mono">
+                                    326-Seat Stadium Auditorium
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {flagshipTodaySlots.slice(0, 4).map((slot) => (
+                                  <button
+                                    key={slot.id}
+                                    type="button"
+                                    onClick={() =>
+                                      handleExpress3DBook(heroMovie, primaryCityTheatre, slot)
+                                    }
+                                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-rose-600 border border-emerald-500/40 hover:border-rose-400 text-left transition-colors cursor-pointer group"
+                                  >
+                                    <div className="font-mono text-xs font-bold text-white">
+                                      {slot.time}
+                                    </div>
+                                    <div className="text-[10px] font-mono text-emerald-400 group-hover:text-rose-100">
+                                      {slot.format} · ₹{slot.standardPriceInr}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      <div className="lg:col-span-4 hidden lg:flex justify-end">
-                        <img
-                          src={heroMovie.posterUrl}
-                          alt={heroMovie.title}
-                          referrerPolicy="no-referrer"
+                      {/* Right 4 Columns: Framed Vertical Poster & Interactive Spotlight Switcher */}
+                      <div className="lg:col-span-4 flex flex-col items-center lg:items-end justify-between gap-4">
+                        <div
                           onClick={() => handleOpenMovie(heroMovie)}
-                          className="w-60 aspect-[3/4] object-cover rounded-2xl border border-white/20 shadow-2xl hover:scale-105 transition-transform cursor-pointer"
-                        />
+                          className="relative w-60 sm:w-68 aspect-[3/4] rounded-2xl overflow-hidden border border-white/20 shadow-2xl cursor-pointer cinema-card-hover"
+                        >
+                          <img
+                            src={heroMovie.posterUrl}
+                            alt={heroMovie.title}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                          <div className="absolute bottom-3 left-3.5 right-3.5 flex items-center justify-between text-xs font-mono text-white">
+                            <span className="text-amber-400 font-bold">★ {heroMovie.rating}</span>
+                            <span>From ₹{heroMovie.basePriceInr}</span>
+                          </div>
+                        </div>
+
+                        {/* Interactive 5-Movie Spotlight Switcher Dock with Prev/Next */}
+                        {spotlightMovies.length > 1 && (
+                          <div className="flex items-center gap-2 bg-[#06080e]/90 border border-white/10 p-2 rounded-2xl">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHeroSpotlightIdx(
+                                  (prev) =>
+                                    (prev - 1 + spotlightMovies.length) % spotlightMovies.length
+                                )
+                              }
+                              aria-label="Previous Spotlight Movie"
+                              className="w-8 h-12 rounded-xl bg-slate-900 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              ‹
+                            </button>
+                            {spotlightMovies.map((sm, idx) => {
+                              const isActive =
+                                idx === heroSpotlightIdx % spotlightMovies.length;
+                              return (
+                                <button
+                                  key={sm.id}
+                                  type="button"
+                                  onClick={() => setHeroSpotlightIdx(idx)}
+                                  title={sm.title}
+                                  className={`relative w-11 h-15 rounded-xl overflow-hidden border transition-all cursor-pointer ${
+                                    isActive
+                                      ? 'border-rose-500 scale-105 ring-2 ring-rose-500/40'
+                                      : 'border-white/15 opacity-55 hover:opacity-100'
+                                  }`}
+                                >
+                                  <img
+                                    src={sm.posterUrl}
+                                    alt={sm.title}
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHeroSpotlightIdx(
+                                  (prev) => (prev + 1) % spotlightMovies.length
+                                )
+                              }
+                              aria-label="Next Spotlight Movie"
+                              className="w-8 h-12 rounded-xl bg-slate-900 hover:bg-rose-600 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              ›
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </section>
                 )}
 
-                {/* Category Tabs, Language Filters, Genre Filters & Merge Sort Selector */}
-                <section id="now-showing" className="space-y-5">
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
-                    {/* 4 Core Homepage Sections */}
-                    <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 border border-white/10 p-1 rounded-xl">
-                      {[
-                        { id: 'now_showing', label: `Now Showing in ${selectedCity}` },
-                        { id: 'trending', label: 'Trending Now' },
-                        { id: 'popular_city', label: `Popular in ${selectedCity}` },
-                        { id: 'recommended', label: 'Recommended Movies' },
-                      ].map((tab) => (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => setSelectedCategoryTab(tab.id as any)}
-                          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                            selectedCategoryTab === tab.id
-                              ? 'bg-rose-600 text-white'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
+                {/* Express Quick-Book Bar: Pick Movie → Multiplex → Showtime → Enter 326-Seat 3D Auditorium */}
+                {activeQuickMovie && activeQuickTheatre && activeQuickSlot && (
+                  <section className="p-5 rounded-2xl cinema-surface border border-white/15 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-0.5 shrink-0">
+                      <span className="text-[11px] font-semibold text-rose-400 tracking-wider">
+                        EXPRESS 3D TICKET DESK · {selectedCity.toUpperCase()}
+                      </span>
+                      <h2 className="font-display text-base font-bold text-white">
+                        Instant 326-Seat 3D Auditorium Launcher
+                      </h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1 max-w-3xl">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">
+                          1. Select Running Movie
+                        </label>
+                        <select
+                          value={activeQuickMovie.id}
+                          onChange={(e) => setQuickBookMovieId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs font-semibold text-white focus:outline-none focus:border-rose-500 cursor-pointer"
                         >
-                          {tab.label}
-                        </button>
-                      ))}
+                          {movies.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.title} (★ {m.rating})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">
+                          2. Select {selectedCity} Multiplex (AVL Indexed)
+                        </label>
+                        <select
+                          value={activeQuickTheatre.id}
+                          onChange={(e) => setQuickBookTheatreId(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs font-semibold text-white focus:outline-none focus:border-rose-500 cursor-pointer"
+                        >
+                          {theatres.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.id})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">
+                          3. Select Today&apos;s Showtime ({todayDateStr})
+                        </label>
+                        <select
+                          value={quickBookSlotIdx % Math.max(1, activeQuickSlots.length)}
+                          onChange={(e) => setQuickBookSlotIdx(Number(e.target.value))}
+                          className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-xs font-mono font-semibold text-amber-400 focus:outline-none focus:border-rose-500 cursor-pointer"
+                        >
+                          {activeQuickSlots.map((slot, sIdx) => (
+                            <option key={slot.id} value={sIdx}>
+                              {slot.time} · {slot.format} (₹{slot.standardPriceInr})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleExpress3DBook(activeQuickMovie, activeQuickTheatre, activeQuickSlot)
+                      }
+                      className="py-3 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Enter 3D Hall (₹{activeQuickSlot.standardPriceInr})</span>
+                    </button>
+                  </section>
+                )}
+
+                {/* Section 2: Now Showing Collection Grid with Direct Showtime Quick-Picks */}
+                <section id="now-showing" className="space-y-6">
+                  <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4">
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-rose-400 tracking-wider">
+                        STRICTLY VERIFIED 2026 THEATRICAL RELEASES · {selectedCity.toUpperCase()}
+                      </div>
+                      {/* 4 Core Homepage Category Tabs */}
+                      <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/90 border border-white/10 p-1 rounded-xl">
+                        {[
+                          { id: 'now_showing', label: `Now Showing (${movies.length})` },
+                          { id: 'trending', label: 'Trending Blockbusters' },
+                          { id: 'popular_city', label: `Top in ${selectedCity}` },
+                          { id: 'recommended', label: 'Curated For You' },
+                        ].map((tab) => (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setSelectedCategoryTab(tab.id as any)}
+                            className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                              selectedCategoryTab === tab.id
+                                ? 'bg-rose-600 text-white'
+                                : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Merge Sort O(n log n) Dropdown */}
@@ -1872,7 +2160,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Language & Genre Interactive Filter Bars */}
+                  {/* Language, Format Experience & Genre Interactive Filter Bars */}
                   <div className="flex flex-wrap items-center justify-between gap-4 text-xs">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-slate-400 mr-1">Language:</span>
@@ -1888,6 +2176,24 @@ export default function App() {
                           }`}
                         >
                           {lang}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-slate-400 mr-1">Experience:</span>
+                      {['All', 'IMAX', 'Dolby Atmos', '4DX', '2D'].map((fmt) => (
+                        <button
+                          key={fmt}
+                          type="button"
+                          onClick={() => setSelectedFormatFilter(fmt)}
+                          className={`px-3 py-1.5 rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                            selectedFormatFilter === fmt
+                              ? 'bg-amber-500 text-slate-950 font-semibold'
+                              : 'bg-slate-900 text-slate-300 hover:text-white border border-white/10'
+                          }`}
+                        >
+                          {fmt === 'All' ? 'All Formats' : fmt}
                         </button>
                       ))}
                     </div>
@@ -1911,9 +2217,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Movie Cards Grid (Zero-Pill Unboxed Metadata Discipline) */}
+                  {/* District-Style Vertical 3:4 Movie Cards Grid */}
                   {displayedMovies.length === 0 ? (
-                    <div className="p-12 rounded-2xl bg-[#0b0f19] border border-white/10 text-center space-y-3">
+                    <div className="p-12 rounded-2xl cinema-surface border border-white/10 text-center space-y-3">
                       <p className="text-base font-semibold text-white">
                         No currently running theatrical movies match your selected filters in{' '}
                         {selectedCity}.
@@ -1923,6 +2229,7 @@ export default function App() {
                         onClick={() => {
                           setSelectedLanguageFilter('All');
                           setSelectedGenreFilter('All');
+                          setSelectedFormatFilter('All');
                           setSearchQuery('');
                         }}
                         className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-semibold cursor-pointer"
@@ -1931,83 +2238,223 @@ export default function App() {
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {displayedMovies.map((movie) => (
-                        <article
-                          key={movie.id}
-                          className="group bg-[#0b0f19] border border-white/10 hover:border-rose-500/50 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-1 shadow-lg"
-                        >
-                          <div
-                            onClick={() => handleOpenMovie(movie)}
-                            className="relative aspect-[4/3] w-full overflow-hidden bg-slate-900 cursor-pointer"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7">
+                      {displayedMovies.map((movie) => {
+                        const isWatchlisted = watchlist.some((w) => w.id === movie.id);
+                        return (
+                          <article
+                            key={movie.id}
+                            className="group cinema-surface border border-white/10 hover:border-rose-500/50 rounded-2xl overflow-hidden flex flex-col cinema-card-hover shadow-xl"
                           >
-                            <img
-                              src={movie.posterUrl}
-                              alt={movie.title}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0f19] via-transparent to-transparent" />
+                            {/* Full Vertical 3:4 Theatrical Poster Showcase */}
+                            <div
+                              onClick={() => handleOpenMovie(movie)}
+                              className="relative aspect-[3/4] w-full overflow-hidden bg-[#06080e] cursor-pointer"
+                            >
+                              <img
+                                src={movie.posterUrl}
+                                alt={movie.title}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                              {/* Measured contrast scrim at bottom */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-[#090d16] via-[#090d16]/25 to-transparent" />
 
-                            <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs font-mono">
-                              <span className="text-amber-400 font-bold">
-                                ★ {movie.rating}/10
-                              </span>
-                              <span className="text-slate-200">{movie.durationFormatted}</span>
-                            </div>
-                          </div>
-
-                          <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                            <div className="space-y-1.5">
-                              {/* Unboxed quiet inline metadata with typographic separators */}
-                              <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
-                                <span>{movie.genres.join(' / ')}</span>
-                                <span aria-hidden="true">·</span>
-                                <span>{movie.certification}</span>
-                                <span aria-hidden="true">·</span>
-                                <span>{movie.releaseDate}</span>
-                              </div>
-
-                              <h3
-                                onClick={() => handleOpenMovie(movie)}
-                                className="font-display text-lg font-bold text-white group-hover:text-rose-400 transition-colors cursor-pointer"
+                              {/* Quick Trailer Preview Button on Poster Top-Left */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedMovie(movie);
+                                  setShowTrailerModal(true);
+                                }}
+                                className="absolute top-3.5 left-3.5 px-2.5 py-1.5 rounded-xl bg-black/70 hover:bg-rose-600 border border-white/15 flex items-center gap-1.5 text-[11px] font-semibold text-white transition-colors cursor-pointer"
                               >
-                                {movie.title}
-                              </h3>
+                                <Play className="w-3 h-3 text-amber-400" />
+                                <span>Trailer</span>
+                              </button>
 
-                              <div className="text-xs text-slate-300">
-                                Languages: {movie.languages.join(', ')}
-                              </div>
+                              {/* Watchlist quick toggle button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleWatchlist(movie);
+                                }}
+                                aria-label="Toggle Watchlist"
+                                className="absolute top-3.5 right-3.5 w-9 h-9 rounded-xl bg-black/65 hover:bg-rose-600 border border-white/15 flex items-center justify-center text-white transition-colors cursor-pointer"
+                              >
+                                {isWatchlisted ? (
+                                  <BookmarkCheck className="w-4 h-4 text-emerald-400" />
+                                ) : (
+                                  <Bookmark className="w-4 h-4 text-white" />
+                                )}
+                              </button>
 
-                              <div className="text-[11px] font-mono text-emerald-400 pt-1">
-                                {movie.verifiedShowCount} Verified Shows in {selectedCity} ·{' '}
-                                {movie.sourceProvider === 'ADMIN_CATALOGUE'
-                                  ? 'Admin Catalogue'
-                                  : 'Live Schedule'}
+                              {/* Bottom Poster Scrim Info */}
+                              <div className="absolute bottom-3.5 left-4 right-4 flex items-end justify-between gap-2">
+                                <div>
+                                  <div className="font-mono text-xs font-bold text-amber-400">
+                                    ★ {movie.rating}/10 · {movie.votesCount.toLocaleString()} votes
+                                  </div>
+                                  <div className="text-[11px] text-slate-300 mt-0.5">
+                                    {movie.formats.join(' · ')}
+                                  </div>
+                                </div>
+                                <span className="font-mono text-xs text-slate-200 tabular-nums">
+                                  {movie.durationFormatted}
+                                </span>
                               </div>
                             </div>
 
-                            <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-[11px] text-slate-400">Tickets From</div>
-                                <div className="font-mono text-base font-bold text-amber-400 tabular-nums">
-                                  ₹{movie.basePriceInr}
+                            {/* Card Body: Unboxed Metadata + Express Showtimes + Primary CTA */}
+                            <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                              <div className="space-y-1.5">
+                                {/* Unboxed quiet inline metadata with typographic separators */}
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                                  <span>{movie.genres.join(' / ')}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{movie.certification}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{movie.releaseDate}</span>
+                                </div>
+
+                                <h3
+                                  onClick={() => handleOpenMovie(movie)}
+                                  className="font-display text-xl font-bold text-white group-hover:text-rose-400 transition-colors cursor-pointer leading-snug"
+                                >
+                                  {movie.title}
+                                </h3>
+
+                                <div className="text-xs text-slate-300">
+                                  {movie.languages.join(' · ')}
+                                </div>
+
+                                <div className="text-[11px] font-mono text-emerald-400 pt-0.5">
+                                  {movie.verifiedShowCount} Verified Shows in {selectedCity} ·{' '}
+                                  {movie.sourceProvider === 'ADMIN_CATALOGUE'
+                                    ? 'Admin Catalogue'
+                                    : 'Live Running'}
                                 </div>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenMovie(movie)}
-                                className="py-2.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
-                              >
-                                Book Tickets
-                              </button>
+                              {/* Direct Showtime Quick-Picks (Jump straight into 326-seat 3D Auditorium) */}
+                              {primaryCityTheatre && flagshipTodaySlots.length > 0 && (
+                                <div className="pt-2 border-t border-white/10 space-y-1.5">
+                                  <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                                    <span className="truncate">
+                                      Today at {primaryCityTheatre.name.split(':')[0]}
+                                    </span>
+                                    <span className="font-mono text-[10px] text-amber-400 shrink-0">
+                                      Instant 3D View
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-1.5">
+                                    {flagshipTodaySlots.slice(0, 3).map((slot) => (
+                                      <button
+                                        key={slot.id}
+                                        type="button"
+                                        onClick={() =>
+                                          handleExpress3DBook(movie, primaryCityTheatre, slot)
+                                        }
+                                        className="py-1.5 px-2 rounded-lg bg-slate-900/90 hover:bg-rose-600 border border-white/10 hover:border-rose-400 text-center font-mono text-[11px] font-semibold text-slate-200 hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+                                      >
+                                        {slot.time}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Price Baseline & Primary Action */}
+                              <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-[11px] text-slate-400">Tickets From</div>
+                                  <div className="font-mono text-lg font-bold text-amber-400 tabular-nums">
+                                    ₹{movie.basePriceInr}
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenMovie(movie)}
+                                  className="py-2.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shadow-md shadow-rose-600/20"
+                                >
+                                  Book Tickets
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        </article>
-                      ))}
+                          </article>
+                        );
+                      })}
                     </div>
                   )}
+                </section>
+
+                {/* Section 3: Flagship Multiplexes & IMAX / Dolby Atmos Venues in Selected City (AVL Tree Indexed) */}
+                <section className="space-y-4 pt-4 border-t border-white/10">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <span className="text-xs font-semibold text-amber-400 tracking-wider">
+                        AVL TREE INDEXED MULTIPLEXES IN {selectedCity.toUpperCase()} ({theatres.length} VENUES)
+                      </span>
+                      <h2 className="font-display text-2xl font-bold text-white mt-0.5">
+                        Flagship Cinema Experiences &amp; 326-Seat 3D Auditoriums
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('map')}
+                      className="text-xs font-semibold text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Explore Interactive GPS Theatre Map</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {theatres.map((th) => (
+                      <div
+                        key={th.id}
+                        className="p-5 rounded-2xl cinema-surface border border-white/10 hover:border-amber-500/40 flex flex-col justify-between gap-4 cinema-card-hover"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-mono">
+                            <span className="text-amber-400 font-bold">{th.id}</span>
+                            <span className="text-slate-400">
+                              ★ {th.rating} · {th.distanceKm} km
+                            </span>
+                          </div>
+                          <h3 className="font-display text-base font-bold text-white">{th.name}</h3>
+                          <p className="text-xs text-slate-400 line-clamp-1">{th.address}</p>
+                          <div className="text-[11px] text-slate-300 pt-1">
+                            {th.screensCount} Screens · {th.formatsSupported.join(' · ')}
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-2 text-xs">
+                          <span className="font-mono text-emerald-400 font-semibold tabular-nums">
+                            From ₹{th.basePriceInr}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetMovie = heroMovie || movies[0];
+                              if (targetMovie) {
+                                setSelectedMovie(targetMovie);
+                                setBookingTheatre(th);
+                                setBookingStep('schedule');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }
+                            }}
+                            className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-rose-600 border border-white/10 text-white font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                          >
+                            View Showtimes
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </section>
               </>
             )}
